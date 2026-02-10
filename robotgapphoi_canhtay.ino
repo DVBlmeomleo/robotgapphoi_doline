@@ -1,11 +1,13 @@
 #include <Servo.h>
 #include <SoftwareSerial.h>
+#include <Wire.h>
 
-Servo base, arm1, arm2, arm3, grip, junior_grip;
-SoftwareSerial blt_data;
-int pwm[6] = [1100, 1100, 1100, 1100, 1100, 1100];
-int setpoint[10] = [1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100];
+Servo base, arm, grip, junior_grip;
+SoftwareSerial blt_data(8, 9);
+int pwm[4] = {1100, 1100, 1100, 1100};
+int setpoint[8] = {1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100}; //set giới hạn của cánh tay
 bool imu_grip = false;
+char data;
 //xung PWM từ 1100 đến 1900 (0 - 180 độ)
 //base và grip thì tự điều khiển
 //cần setpoint cho arm
@@ -13,13 +15,12 @@ bool imu_grip = false;
 float accX, accY, accZ;
 
 void setup() {
-  base.attach(base, 3); //xung PWM
-  arm1.attach(base, 4);
-  arm2.attach(base, 5);
-  arm3.attach(base, 6);
-  grip.attach(base, 7);
+  base.attach(3); //xung PWM
+  arm.attach(4);
+  junior_grip.attach(5);
+  grip.attach(7);
   Serial.begin(9600);
-  blt_data.begin(8, 9);
+  blt_data.begin(9600);
 
   //IMU MP6050
   Wire.beginTransmission(0x68); //lọc nhiễu hoặc gì đấy ?
@@ -46,7 +47,7 @@ void loop() {
     case 'w':
       up();
       break;
-    case 'd':
+    case 's':
       down();
       break;
     case 'a':
@@ -70,12 +71,13 @@ void loop() {
       }
       break;
   }
+  run_sv();
 }
 
 char get_data(){
   if (blt_data.available() > 0){
-    data = blt_data.read();
-    return data;
+    char data_p = blt_data.read();
+    return data_p;
   }
   return '0';
 }
@@ -83,43 +85,34 @@ char get_data(){
 void up(){
   int a;
   if (imu_grip == false){
-    a = 6;
+    a = 2;
   }else{
-    a = 5
+    a = 1;
   }
-  for (int i = 0; i < a; i++){
+  for (int i = 1; i < a; i++){
     pwm[i]++;
-    if (pwm[i] > setpoint[i]){
-      pwm[i]--;
-    }
-  }
-}
-
-void up(){
-  int a;
-  if (imu_grip == false){
-    a = 6;
-  }else{
-    a = 5
-  }
-  for (int i = 0; i < a; i++){
-    pwm[i]++;
-    if (pwm[i] > setpoint[i]){
-      pwm[i]--;
+    if (pwm[i] > setpoint[i + 4]){
+      for (int c = 1; c <= i; c++){
+        pwm[c]--;
+      }
+      pwm[i] = setpoint[i + 4];
     }
   }
 }
 void down(){
   int a;
   if (imu_grip == false){
-    a = 6;
+    a = 2;
   }else{
-    a = 5
+    a = 1;
   }
-  for (int i = 0; i < a; i++){
-    pwm[i]++;
-    if (pwm[i] > setpoint[i]){
-      pwm[i]--;
+  for (int i = 1; i < a; i++){
+    pwm[i]--;
+    if (pwm[i] < setpoint[i]){
+      for (int c = 1; c <= i; c++){
+        pwm[i]++;
+      }
+      pwm[i] = setpoint[i];
     }
   }
 }
@@ -134,6 +127,12 @@ void right(){
   if (pwm[0] < setpoint[0]){
     pwm[0] = setpoint[0];
   }
+}
+void run_sv(){
+  base.writeMicroseconds(pwm[0]);
+  arm.writeMicroseconds(pwm[1]);
+  junior_grip.writeMicroseconds(pwm[2]);
+  grip.writeMicroseconds(pwm[3]);
 }
 
 void grab(){
